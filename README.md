@@ -34,5 +34,5 @@ If PyTorch was compiled using `clang++`, you may run into issues if `pip` defaul
 export CXX=/usr/bin/clang++
 export CPPFLAGS="-stdlib=libc++"
 export MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion)
-pip install --verbose git+https://github.com/bruel-gabrielsson/TopologyLayer.git
+python setup.py install --record files.txt
 ```
