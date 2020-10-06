@@ -1,0 +1,9 @@
+dataset
+results
+__pycache__
+*.pyc
+.DS_Store
+*.txt
+build
+dist
+*.egg-info
