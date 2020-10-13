@@ -14,17 +14,12 @@ import ordercpp
 import time
 
 class GraphOrder(nn.Module):
-    def __init__(self, num_layers, num_mlp_layers, input_dim, hidden_dim, output_dim, final_dropout, learn_eps, graph_pooling_type, neighbor_pooling_type, max_deg, network, sorting, size, type, device):
+    def __init__(self, input_dim, hidden_dim, output_dim, final_dropout, network, sorting, size, type, sort_nodes, device):
         '''
-            num_layers: number of layers in the neural networks (INCLUDING the input layer)
-            num_mlp_layers: number of layers in mlps (EXCLUDING the input layer)
             input_dim: dimensionality of input features
             hidden_dim: dimensionality of hidden units at ALL layers
             output_dim: number of classes for prediction
             final_dropout: dropout ratio on the final linear layer
-            learn_eps: If True, learn epsilon to distinguish center nodes from neighboring nodes. If False, aggregate neighbors and center nodes altogether.
-            neighbor_pooling_type: how to aggregate neighbors (mean, average, or max)
-            graph_pooling_type: how to aggregate entire nodes in a graph (mean, average)
             device: which device to use
         '''
 
@@ -37,6 +32,7 @@ class GraphOrder(nn.Module):
         self.hidden_dim = hidden_dim
         self.middle_dim  = hidden_dim
         self.node_dim = hidden_dim
+        self.sort_nodes = sort_nodes
         if self.type == "OrderP":
             self.node_dim = hidden_dim // 2
 
@@ -233,7 +229,7 @@ class GraphOrder(nn.Module):
         if self.type == "OrderP": powerful = True
 
         pass_to_cpp = [g.order_edges.astype(np.int32) for g in batch_graph]
-        levels, a_levels, b_levels, cppsparseinds = ordercpp.preprocess_order(pass_to_cpp, option, powerful, maxlevel)
+        levels, a_levels, b_levels, cppsparseinds = ordercpp.preprocess_order(pass_to_cpp, option, powerful, maxlevel, self.sort_nodes)
 
         a, b = torch.transpose(torch.LongTensor(cppsparseinds), 0, 1), torch.ones(len(cppsparseinds))
         sparse = torch.sparse.LongTensor(a, b, torch.Size([len(batch_graph), len(cppsparseinds)]))

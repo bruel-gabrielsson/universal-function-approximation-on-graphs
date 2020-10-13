@@ -84,6 +84,7 @@ def test(args, model, device, train_graphs, test_graphs, epoch, num_shuffles=5):
     correct = pred.eq(labels.view_as(pred)).sum().cpu().item()
     acc_test = correct / float(len(test_graphs))
 
+    # this is subgraph dropout, we aggregate during eval
     for i in range(num_shuffles-1):
         output += pass_data_iteratively(model, test_graphs)
     output = output / float(num_shuffles)
@@ -100,7 +101,7 @@ def test(args, model, device, train_graphs, test_graphs, epoch, num_shuffles=5):
 def main(obj):
     # Training settings
     # Note: Hyper-parameters need to be tuned in order to obtain results reported in the paper.
-    parser = argparse.ArgumentParser(description='PyTorch graph convolutional neural net for whole-graph classification')
+    parser = argparse.ArgumentParser(description='PyTorch Node Parsing Net for whole-graph classification')
     parser.add_argument('--dataset', type=str, default="MUTAG",
                         help='name of dataset (default: MUTAG)')
     parser.add_argument('--device', type=int, default=0,
@@ -117,30 +118,24 @@ def main(obj):
                         help='random seed for splitting the dataset into 10 (default: 0)')
     parser.add_argument('--fold_idx', type=int, default=0,
                         help='the index of fold in 10-fold validation. Should be less then 10.')
-    parser.add_argument('--num_mlp_layers', type=int, default=2,
-                        help='number of layers for MLP EXCLUDING the input one (default: 2). 1 means linear model.')
     parser.add_argument('--hidden_dim', type=int, default=64,
                         help='number of hidden units (default: 64)')
     parser.add_argument('--final_dropout', type=float, default=0.5,
                         help='final layer dropout (default: 0.5)')
-    parser.add_argument('--graph_pooling_type', type=str, default="sum", choices=["sum", "average"],
-                        help='Pooling for over nodes in a graph: sum or average')
-    parser.add_argument('--neighbor_pooling_type', type=str, default="sum", choices=["sum", "average", "max"],
-                        help='Pooling for over neighboring nodes: sum, average or max')
     parser.add_argument('--degree_as_tag', action="store_true",
     					help='let the input node features be the degree of nodes (heuristics for unlabeled graph)')
     parser.add_argument('--filename', type = str, default = "",
                                         help='output file')
     parser.add_argument('--type', type = str, default = "",
-                                        help='What type of model to use, Order or something else')
+                                        help='What type of model to use, "Order" or "OrderP" which is most discriminatory ')
     parser.add_argument('--sorting', type = str, default = "deg_both",
-                                        help='What type of model to use, Order or something else')
+                                        help='What type of edge sorting to use')
     parser.add_argument('--size', type = str, default = "small",
                                         help='Size of model, "big" or "small"')
+    parser.add_argument('--sort_nodes', action='store_true',
+                    help='If sort nodes in edges -S in paper')
     args = parser.parse_args()
     #set up seeds and gpu device
-    args.num_layers = -1 # not used
-    args.learn_eps = False # not used
     args.dont_split = False
     for key in obj:
         setattr(args, key, obj[key])
@@ -180,7 +175,7 @@ def main(obj):
     if args.type == "Order" or args.type == "OrderP":
         print("--- ORDER ---")
         train_graphs, test_graphs, train_idx, test_idx, num_classes, max_deg = prepare_data_order(args)
-        model = GraphOrder(args.num_layers, args.num_mlp_layers, train_graphs[0].node_features.shape[1], args.hidden_dim, num_classes, args.final_dropout, args.learn_eps, args.graph_pooling_type, args.neighbor_pooling_type, max_deg, args.network, args.sorting, args.size, args.type, device).to(device)
+        model = GraphOrder(train_graphs[0].node_features.shape[1], args.hidden_dim, num_classes, args.final_dropout, args.network, args.sorting, args.size, args.type, args.sort_nodes, device).to(device)
 
     if not args.filename == "":
         f = open(args.filename[:-3] + "_args.txt","w+")
@@ -207,17 +202,18 @@ def main(obj):
 if __name__ == '__main__':
     print("--- start ---")
     import os
-    dataset = "MUTAG"
+    dataset = "PTC" # ["MUTAG", "NCI1", "PROTEINS", "PTC"]
     epochs = 350
     type = "OrderP" # ["Order", "OrderP"]
     size = "big" #["big", "small"]
     lr = 0.01 # 0.01
+    sort_nodes = False # -S in paper
     for sorting in ["all"]: # ["deg_one", "deg_both", "all", "none"]
         for network in ["LSTM"]:
             for final_dropout in [0]:
                 for hidden_dim in [64]:
                     for batch_size in [64]:
-                        prefix = "_tree_halfflows5l_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(type, network, dataset, hidden_dim, batch_size, final_dropout, sorting, lr, size)
+                        prefix = "_tree_halfflows5l_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(type, network, dataset, hidden_dim, batch_size, final_dropout, sorting, lr, size, sort_nodes)
                         if not os.path.exists("./{}".format(prefix)): os.mkdir("./{}".format(prefix))
                         for i in range(10):
                             # Putting them here instead
@@ -229,5 +225,5 @@ if __name__ == '__main__':
                             obj = {'sorting':sorting, 'type':type, 'network':network, 'fold_idx':i,
                                 'dataset': dataset, 'hidden_dim': hidden_dim, 'batch_size':batch_size,
                                 'epochs': epochs, 'filename': filename, 'final_dropout': final_dropout,
-                                'lr': lr, 'size': size}
+                                'lr': lr, 'size': size, 'sort_nodes': sort_nodes}
                             main(obj)

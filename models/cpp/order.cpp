@@ -75,7 +75,7 @@ bool compareDegOne(std::vector<int> ar1, std::vector<int> ar2) {
 // edges [[graph, edgenum, n1, n2]] Pass in so graphs appear consistently
 // one pass to fix each graph (loop through every graph orderly)
 // another pass to fix offset based on level lengths (level_to_offset array and just go through all edges of all graphs)
-std::tuple< std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<std::vector<int>> > preprocess_order(std::vector<std::vector<std::vector<int>>> vector_of_graph_edges, int option, bool powerful, int maxlevel) {
+std::tuple< std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<std::vector<int>> > preprocess_order(std::vector<std::vector<std::vector<int>>> vector_of_graph_edges, int option, bool powerful, int maxlevel, bool sort_nodes) {
   std::vector<int> level_lengths;
   level_lengths.push_back(0);
   std::vector<std::vector<std::vector<int>>> all_processed_a;
@@ -83,7 +83,7 @@ std::tuple< std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<
   std::vector<std::vector<int>> all_processed_edges;
   for (size_t i = 0; i<vector_of_graph_edges.size(); i++) {
     std::vector<std::vector<int>> *vec = &vector_of_graph_edges[i];
-    process_graph(vec, (int) i, &all_processed_edges, &level_lengths, option, powerful, maxlevel, &all_processed_a, &all_processed_b); // , &all_processed_b);
+    process_graph(vec, (int) i, &all_processed_edges, &level_lengths, option, powerful, sort_nodes, maxlevel, &all_processed_a, &all_processed_b); // , &all_processed_b);
   }
 
   // print2d(&all_processed_a);
@@ -121,38 +121,11 @@ std::tuple< std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<
       // std::vector<std::vector<int>> temp_level = {{acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2}};
       std::vector<std::vector<int>> temp_level = {{first, second, acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2, full_intersection}};
       levels.push_back(temp_level);
-      // Always want oldest first!
-      // if (level1 > level2) {
-      //   std::vector<std::vector<int>> temp_level = {{acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2}};
-      //   levels.push_back(temp_level);
-      // } else if (level1 < level2) {
-      //   std::vector<std::vector<int>> temp_level = {{acc_level_lengths[level2]+offset2, acc_level_lengths[level1]+offset1}};
-      //   levels.push_back(temp_level);
-      // } else { // if equal randomize
-      //   if ( ((double) std::rand() / (RAND_MAX)) > 0.5 ) {
-      //     std::vector<std::vector<int>> temp_level = {{acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2}};
-      //     levels.push_back(temp_level);
-      //   } else {
-      //     std::vector<std::vector<int>> temp_level = {{acc_level_lengths[level2]+offset2, acc_level_lengths[level1]+offset1}};
-      //     levels.push_back(temp_level);
-      //   }
-      // }
-
+      
     } else {
       // levels[level].push_back({acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2});
       levels[level].push_back({first, second, acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2, full_intersection});
-      // Always want oldest first!
-      // if (level1 > level2) {
-      //   levels[level].push_back({acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2});
-      // } else if (level1 < level2) {
-      //   levels[level].push_back({acc_level_lengths[level2]+offset2, acc_level_lengths[level1]+offset1});
-      // } else { // if equal randomize
-      //   if ( ((double) std::rand() / (RAND_MAX)) > 0.5 ) {
-      //     levels[level].push_back({acc_level_lengths[level1]+offset1, acc_level_lengths[level2]+offset2});
-      //   } else {
-      //     levels[level].push_back({acc_level_lengths[level2]+offset2, acc_level_lengths[level1]+offset1});
-      //   }
-      // }
+
     }
 
     if (powerful) {
@@ -248,7 +221,7 @@ std::tuple< std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::vector<
 
 // Will shuffle and sort edges and return ordered edges
 // as well as num_levels, levels_size, num_nodes
-void process_graph(std::vector<std::vector<int>> *edges_p, int graph_num, std::vector<std::vector<int>> *processed_edges_p, std::vector<int> *level_lengths_so_far_p, int option, bool powerful, int maxlevel,
+void process_graph(std::vector<std::vector<int>> *edges_p, int graph_num, std::vector<std::vector<int>> *processed_edges_p, std::vector<int> *level_lengths_so_far_p, int option, bool powerful, bool sort_nodes, int maxlevel,
     std::vector<std::vector<std::vector<int>>> *all_processed_a_p, std::vector<std::vector<std::vector<int>>> *all_processed_b_p) { //}, std::vector<std::vector<int>> *all_processed_b_p) {
 
   std::random_shuffle(edges_p->begin(), edges_p->end()); // Shuffle before sort
@@ -282,17 +255,18 @@ void process_graph(std::vector<std::vector<int>> *edges_p, int graph_num, std::v
     extend_if_needed_d1(&group_num_to_offset, &group_nums, -2);
     int level1 = group_num_to_level[group_num1], level2 = group_num_to_level[group_num2];
 
-    // if (option == 2 && level1 < level2) {
-    //   int temp = first;
-    //   first = second;
-    //   second = temp;
-    //   temp = group_num1;
-    //   group_num1 = group_num2;
-    //   group_num2 = temp;
-    //   temp = level1;
-    //   level1 = level2;
-    //   level2 = temp;
-    // }
+    // This decides if to sort nodes within edge according to levels, -S in paper
+    if (sort_nodes && level1 < level2) {
+      int temp = first;
+      first = second;
+      second = temp;
+      temp = group_num1;
+      group_num1 = group_num2;
+      group_num2 = temp;
+      temp = level1;
+      level1 = level2;
+      level2 = temp;
+    }
 
     int level = std::max(level1, level2) + 1;
     if (maxlevel > 0 && level > maxlevel) continue;
