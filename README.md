@@ -2,7 +2,7 @@
 
 This repository is the official PyTorch implementation of the experiments in the following paper:
 
-Rickard Brüel-Gabrielsson. Universal Function Approximation on Graphs
+Rickard Brüel-Gabrielsson. Universal Function Approximation on Graphs (NeurIPS 2020)
 
 [arXiv](https://arxiv.org/pdf/2003.06706.pdf)
 
